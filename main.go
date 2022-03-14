@@ -25,6 +25,24 @@ func (cfg PostgresConfig) String() string {
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 }
 
+type Author struct {
+	//bun.BaseModel
+
+	ID   int64 `bun:",pk"`
+	Name string
+}
+
+type Book struct {
+	//bun.BaseModel `bun:"alias:b"`
+
+	ID       int64 `bun:",pk"`
+	AuthorID int64
+	Title    string
+
+	Author *Author `bun:"rel:belongs-to,join:author_id=id"`
+	//Author *Author `bun:"rel:has-one,join:author_id=id"`
+}
+
 func main() {
 	var cfg PostgresConfig
 	if err := envconfig.Process("db", &cfg); err != nil {
@@ -57,7 +75,6 @@ func main() {
 	}
 
 	{
-
 		res, err := db.NewSelect().ColumnExpr("1").Exec(ctx)
 		if err != nil {
 			panic(err)
@@ -71,5 +88,19 @@ func main() {
 			panic(err)
 		}
 		fmt.Println(num)
+	}
+
+	{
+		ctx := context.Background()
+
+		var book Book
+		if err := db.NewSelect().
+			Model(&book).
+			Relation("Author").      // Relation is the field name.
+			Where("book.id = ?", 1). // The alias is by default the singular name of the model.
+			Scan(ctx); err != nil {
+			panic(err)
+		}
+		fmt.Println(book)
 	}
 }
