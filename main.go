@@ -39,6 +39,7 @@ type Book struct {
 	AuthorID int64
 	Title    string
 
+	// Both works in a similar way.
 	Author *Author `bun:"rel:belongs-to,join:author_id=id"`
 	//Author *Author `bun:"rel:has-one,join:author_id=id"`
 }
@@ -90,17 +91,60 @@ func main() {
 		fmt.Println(num)
 	}
 
-	{
-		ctx := context.Background()
+	listBooks(ctx, db)
+	book := createBook(ctx, db)
 
-		var book Book
-		if err := db.NewSelect().
-			Model(&book).
-			Relation("Author").      // Relation is the field name.
-			Where("book.id = ?", 1). // The alias is by default the singular name of the model.
-			Scan(ctx); err != nil {
-			panic(err)
-		}
-		fmt.Println(book)
+	if err := deleteBook(ctx, db, book.ID); err != nil {
+		panic(fmt.Errorf("failed to delete book: %w", err))
 	}
+}
+
+func listBooks(ctx context.Context, db bun.IDB) {
+	fmt.Println("Listing books:")
+
+	var books []Book
+	if err := db.NewSelect().
+		Model(&books).
+		Relation("Author").        // Relation is the field name.
+		Where("author.id = ?", 1). // The alias is by default the singular name of the model.
+		Scan(ctx); err != nil {
+		panic(err)
+	}
+	for _, book := range books {
+		fmt.Println(book, book.Author)
+	}
+}
+
+func createBook(ctx context.Context, db bun.IDB) *Book {
+	fmt.Println("Creating book:")
+
+	book := Book{
+		Title:    "new book",
+		AuthorID: 1,
+	}
+
+	res, err := db.NewInsert().
+		Column("title", "author_id"). // If not specified, id will be inserted too.
+		Model(&book).
+		Returning("*").
+		Exec(ctx)
+	if err != nil {
+		panic(err)
+	}
+	n, _ := res.RowsAffected()
+	fmt.Println("created:", n)
+	return &book
+}
+
+func deleteBook(ctx context.Context, db bun.IDB, bookID int64) error {
+	res, err := db.NewDelete().
+		Model(&Book{ID: bookID}).
+		WherePK().
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	fmt.Println("deleted:", n)
+	return nil
 }
